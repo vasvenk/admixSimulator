@@ -1,0 +1,13 @@
+../geneticData/YRI.phgeno
+../geneticData/YRI.phsnp
+../geneticData/YRI.phind
+../geneticData/CEU.phgeno
+../geneticData/CEU.phsnp
+../geneticData/CEU.phind
+testRun1
+25
+0.2
+10
+False
+False
+25gen2mix
