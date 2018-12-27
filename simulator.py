@@ -1,15 +1,15 @@
-import numpy as np
 import random
+import sys
 from math import exp
 
-def readData(indFile, genoFile, snpFile):
+
+def readData(genoFile, snpFile, indFile):
     """
     Function for creating the relevant data types
     """
     snpData, snpDataCols = open(snpFile).read().split(), []
     for index in range(len(snpData) // 6):
         snpDataCols.append(snpData[6 * index: 6 * index + 6])
-    snpDataCols.sort(key=lambda x: x[3])
     genoData = open(genoFile, encoding="ISO-8859-1")
     genoData = genoData.read().split()
     indData, indDataCols = open(indFile).read().split(), []
@@ -17,68 +17,123 @@ def readData(indFile, genoFile, snpFile):
         indDataCols.append(indData[3 * index: 3 * index + 3])
     return {"ind": indDataCols, "geno": genoData, "snp": snpDataCols}
 
-def mixedPopulation(genoA, genoB, alpha):
-    #Returns a mixed segment
-    allB, allA, newGeno = [x for x in range(len(genoB))], [x for x in range(len(genoA))], ""
-    for ind in range(len(genoA)):
-        if random.uniform(0, 1) < alpha:
-            currPop, currGeno = allA, genoA
-        else:
-            currPop, currGeno = allB, genoB
-        chosenInd = random.choice(currPop)
-        currPop.remove(chosenInd)
-        numRef = currGeno[chosenInd]
-        newGeno += numRef
-    return newGeno
 
-def singlePopulation(geno):
-    #Return a segment for a single population
-    numInd = len(geno)
-    newGeno, allInds = "", [x for x in range(numInd)]
+def initializeState(numInd, alpha, geno, numA, numB, haploid):
+    """
+    Initializes populations, assigning each admixed individual to an individual
+    from a sample population based on the admixture proportion.
+    """
+    usedInd, freeInd, newGeno = {}, {'A': [x for x in range(numA)], 'B': [x for x in range(numB)]}, ""
     for ind in range(numInd):
-        chosenInd = random.choice(allInds)
-        allInds.remove(chosenInd)
-        numRef = geno[chosenInd]
-        newGeno += numRef
-    return newGeno
+        chosenPop = 'A' if random.uniform(0, 1) < alpha else 'B'
+        random.shuffle(freeInd[chosenPop])
+        sampleInd = freeInd[chosenPop].pop()
+        usedInd[ind] = {'pop': chosenPop, 'indNum': sampleInd}
+        newGeno += geno[chosenPop][0][sampleInd]
+    if not haploid:
+        diploidGeno = ''
+        for index in range(0, len(newGeno), 2):
+            currInd, nextInd = int(newGeno[index]), int(newGeno[index + 1])
+            diploidInd = str(currInd + nextInd)
+            diploidGeno += diploidInd
+        newGeno = diploidGeno
+    return newGeno, usedInd, freeInd
 
-def singleAdmixture(popA, popB, alpha, numGenerations):
+
+def swapSample(usedInd, freeInd, ind, geno, currPos, alpha):
+    chosenPop = 'A' if random.uniform(0, 1) < alpha else 'B'
+    prevAncestor = usedInd[ind]
+    random.shuffle(freeInd[chosenPop])
+    newInd = freeInd[chosenPop].pop()
+    usedInd[ind] = {'pop': chosenPop, 'indNum': ind}
+    freeInd[prevAncestor['pop']].append(prevAncestor['indNum'])
+    return geno[chosenPop][currPos][newInd], usedInd, freeInd
+
+
+def writeSnp(snp, popName):
+    with open(popName + '.snp', 'w') as f:
+        for entry in snp:
+            f.write(str(entry[0]) + " " + str(entry[1]) + " " + str(entry[2]) + " " + str(entry[3]) + " " +
+                    str(entry[4]) + " " + str(entry[5]) + "\n")
+
+
+def writeGeno(geno, popName):
+    with open(popName + '.geno', 'w') as f:
+        for entry in geno:
+            f.write(entry + "\n")
+
+
+def writeInd(ind, popName):
+    with open(popName + '.ind', 'w') as f:
+        f.write(ind)
+
+
+def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, popName):
     """
     Model for a single admixture event.
     Takes in dictionaries as created by readData for each population A and B.
     Alpha is the portion of population A.
     NumGenerations is the number of generations since admixture.
     """
-    e = 2.7182
     admixedGeno, admixedSnp = [], []
-    indA, genoA, snpA = popA["ind"], popA["geno"], popA["snp"]
-    indB, genoB, snpB = popB["ind"], popB["geno"], popB["snp"]
-    for currPos in range(1, len(snpA)):
-        distance = float(snpA[currPos][2]) - float(snpA[currPos - 1][2])
-        if np.random.uniform() < exp(- numGenerations * distance):
-            #Choosing from pop A or B
-            if np.random.uniform() < alpha:
-                #Choose pop A
-                newGeno = singlePopulation(genoA[currPos])
-                admixedSnp.append(snpA[currPos])
-                admixedGeno.append(newGeno)
-            else:
-                #Choose pop B
-                newGeno = singlePopulation(genoB[currPos])
-                admixedSnp.append(snpB[currPos])
-                admixedGeno.append(newGeno)
+    ind = {'A': popA["ind"], 'B': popB["ind"]}
+    geno = {'A': popA["geno"], 'B': popB["geno"]}
+    snp = {'A': popA["snp"], 'B': popB["snp"]}
+
+    numA, numB = len(ind['A']), len(ind['B'])
+
+    newGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB, haploid)
+    admixedGeno.append(newGeno)
+    admixedSnp.append(snp['A'][0])
+    totalLength = len(snp['A'])
+    currPercent, lastPercent = 0, -1
+
+    for currPos in range(1, totalLength):
+        distance = float(snp['A'][currPos][2]) - float(snp['A'][currPos - 1][2])
+        currGeno = ""
+        if snp['A'][currPos][1] == snp['A'][currPos - 1][1]:
+            #Same Chromosome
+            for ind in range(numInd):
+                if random.uniform(0, 1) < 1 - exp(- numGenerations * distance):
+                    #Recombination Event-we switch ancestors
+                    newPos, currUsed, free = swapSample(currUsed, free, ind, geno, currPos, alpha)
+                    currGeno += newPos
+                else:
+                    #No recombination- continue as usual
+                    chosenPop, chosenInd = currUsed[ind]['pop'], currUsed[ind]['indNum']
+                    currGeno += geno[chosenPop][currPos][chosenInd]
         else:
-            #Mixed population
-            newGeno = mixedPopulation(genoA[currPos], genoB[currPos], alpha)
-            admixedSnp.append(snpA[currPos])
-            admixedGeno.append(newGeno)
-    return admixedGeno, admixedSnp
+            #Next Chromosome
+            currGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB, haploid)
 
-"""Create CEU- spefic to my files"""
-ceu = readData("../geneticData/CEU.phind", "../geneticData/CEU.phgeno", "../geneticData/CEU.phsnp")
-ceuInd, ceuGeno, ceuSnp =  ceu["ind"], ceu["geno"], ceu["snp"]
+        if not haploid:
+            diploidGeno = ''
+            for index in range(0, len(currGeno), 2):
+                currInd, nextInd = int(currGeno[index]), int(currGeno[index + 1])
+                diploidInd = str(currInd + nextInd)
+                diploidGeno += diploidInd
+            currGeno = diploidGeno
 
-yri = readData("../geneticData/YRI.phind", "../geneticData/YRI.phgeno",  "../geneticData/YRI.phsnp")
-yriInd, yriGeno, yriSnp = yri["ind"], yri["geno"], yri["snp"]
+        admixedSnp.append(snp['A'][currPos])
+        admixedGeno.append(currGeno)
+        currPercent = int((currPos / totalLength) * 100)
+        if currPercent > lastPercent:
+            print("Completed: " + str(currPercent))
+            lastPercent = currPercent
 
-admixedGeno, admixedSnp = singleAdmixture(ceu, yri, 0.5, 10)
+    admixedInd, numIters = '', numInd if haploid else numInd // 2
+    for indNum in range(numIters):
+        admixedInd += popName + str(indNum) + " " + "U" + " " + popName + "\n"
+
+    return admixedGeno, admixedSnp, admixedInd
+
+
+params = list(open(sys.argv[1], "r"))
+popA = readData(params[0], params[1], params[2])
+popB = readData(params[3], params[4], params[5])
+admixedGeno, admixedSnp, admixedInd = singleAdmixture(popA, popB, params[7], params[8], params[9],
+                                                      params[10], eval(params[11]), eval(params[12]))
+outFile = params[6]
+writeGeno(admixedGeno, outFile)
+writeSnp(admixedSnp, outFile)
+writeInd(admixedInd, outFile)
