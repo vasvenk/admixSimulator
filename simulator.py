@@ -81,6 +81,8 @@ def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, p
     snp = {'A': popA["snp"], 'B': popB["snp"]}
 
     numA, numB = len(ind['A']), len(ind['B'])
+    if not haploid:
+        numInd *= 2
 
     newGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB, haploid)
     admixedGeno.append(newGeno)
@@ -128,11 +130,11 @@ def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, p
     return admixedGeno, admixedSnp, admixedInd
 
 
-params = list(open(sys.argv[1], "r"))
+params = open(sys.argv[1], "r").read().split('\n')
 popA = readData(params[0], params[1], params[2])
 popB = readData(params[3], params[4], params[5])
-admixedGeno, admixedSnp, admixedInd = singleAdmixture(popA, popB, params[7], params[8], params[9],
-                                                      params[10], eval(params[11]), eval(params[12]))
+admixedGeno, admixedSnp, admixedInd = singleAdmixture(popA, popB, int(params[7]), float(params[8]), int(params[9]),
+                                                      eval(params[10]), eval(params[11]), params[12])
 outFile = params[6]
 writeGeno(admixedGeno, outFile)
 writeSnp(admixedSnp, outFile)
