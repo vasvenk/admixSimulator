@@ -1,9 +1,9 @@
-../geneticData/YRI.phgeno
-../geneticData/YRI.phsnp
-../geneticData/YRI.phind
-../geneticData/CEU.phgeno
-../geneticData/CEU.phsnp
-../geneticData/CEU.phind
+../geneticData/data/forVV/YRI.phgeno
+../geneticData/data/forVV/YRI.phsnp
+../geneticData/data/forVV/YRI.phind
+../geneticData/data/forVV/CEU.phgeno
+../geneticData/data/forVV/CEU.phsnp
+../geneticData/data/forVV/CEU.phind
 testRun1
 25
 0.2
