@@ -10,7 +10,7 @@ def readData(genoFile, snpFile, indFile):
     snpData, snpDataCols = open(snpFile).read().split(), []
     for index in range(len(snpData) // 6):
         snpDataCols.append(snpData[6 * index: 6 * index + 6])
-    genoData = open(genoFile, encoding="ISO-8859-1")
+    genoData = open(genoFile)
     genoData = genoData.read().split()
     indData, indDataCols = open(indFile).read().split(), []
     for index in range(len(indData) // 3):
@@ -18,7 +18,7 @@ def readData(genoFile, snpFile, indFile):
     return {"ind": indDataCols, "geno": genoData, "snp": snpDataCols}
 
 
-def initializeState(numInd, alpha, geno, numA, numB, haploid):
+def initializeState(numInd, alpha, geno, numA, numB):
     """
     Initializes populations, assigning each admixed individual to an individual
     from a sample population based on the admixture proportion.
@@ -30,13 +30,6 @@ def initializeState(numInd, alpha, geno, numA, numB, haploid):
         sampleInd = freeInd[chosenPop].pop()
         usedInd[ind] = {'pop': chosenPop, 'indNum': sampleInd}
         newGeno += geno[chosenPop][0][sampleInd]
-    if not haploid:
-        diploidGeno = ''
-        for index in range(0, len(newGeno), 2):
-            currInd, nextInd = int(newGeno[index]), int(newGeno[index + 1])
-            diploidInd = str(currInd + nextInd)
-            diploidGeno += diploidInd
-        newGeno = diploidGeno
     return newGeno, usedInd, freeInd
 
 
@@ -48,6 +41,15 @@ def swapSample(usedInd, freeInd, ind, geno, currPos, alpha):
     usedInd[ind] = {'pop': chosenPop, 'indNum': ind}
     freeInd[prevAncestor['pop']].append(prevAncestor['indNum'])
     return geno[chosenPop][currPos][newInd], usedInd, freeInd
+
+
+def haploidToDiploid(haploidGeno):
+    diploidGeno = ''
+    for index in range(0, len(haploidGeno), 2):
+        currInd, nextInd = int(haploidGeno[index]), int(haploidGeno[index + 1])
+        diploidInd = str(currInd + nextInd)
+        diploidGeno += diploidInd
+    return diploidGeno
 
 
 def writeSnp(snp, popName):
@@ -79,12 +81,14 @@ def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, p
     ind = {'A': popA["ind"], 'B': popB["ind"]}
     geno = {'A': popA["geno"], 'B': popB["geno"]}
     snp = {'A': popA["snp"], 'B': popB["snp"]}
-
     numA, numB = len(ind['A']), len(ind['B'])
+
     if not haploid:
         numInd *= 2
-
-    newGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB, haploid)
+        newGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB)
+        newGeno = haploidToDiploid(newGeno)
+    else:
+        newGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB)
     admixedGeno.append(newGeno)
     admixedSnp.append(snp['A'][0])
     totalLength = len(snp['A'])
@@ -106,15 +110,10 @@ def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, p
                     currGeno += geno[chosenPop][currPos][chosenInd]
         else:
             #Next Chromosome
-            currGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB, haploid)
+            currGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB)
 
         if not haploid:
-            diploidGeno = ''
-            for index in range(0, len(currGeno), 2):
-                currInd, nextInd = int(currGeno[index]), int(currGeno[index + 1])
-                diploidInd = str(currInd + nextInd)
-                diploidGeno += diploidInd
-            currGeno = diploidGeno
+            currGeno = haploidToDiploid(currGeno)
 
         admixedSnp.append(snp['A'][currPos])
         admixedGeno.append(currGeno)
