@@ -69,6 +69,12 @@ def writeInd(ind, popName):
     with open(popName + '.ind', 'w') as f:
         f.write(ind)
 
+def writeAncestry(ancestry):
+    with open(popName + '.anc', 'w') as f:
+        for entry in ancestry:
+            f.write(entry + "\n")
+
+
 
 def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, popName):
     """
@@ -77,7 +83,7 @@ def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, p
     Alpha is the portion of population A.
     NumGenerations is the number of generations since admixture.
     """
-    admixedGeno, admixedSnp = [], []
+    admixedGeno, admixedSnp, ancestry = [], [], []
     ind = {'A': popA["ind"], 'B': popB["ind"]}
     geno = {'A': popA["geno"], 'B': popB["geno"]}
     snp = {'A': popA["snp"], 'B': popB["snp"]}
@@ -99,6 +105,7 @@ def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, p
         currGeno = ""
         if snp['A'][currPos][1] == snp['A'][currPos - 1][1]:
             #Same Chromosome
+            currAncestry = ""
             for ind in range(numInd):
                 if random.uniform(0, 1) < 1 - exp(- numGenerations * distance):
                     #Recombination Event-we switch ancestors
@@ -108,15 +115,27 @@ def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, p
                     #No recombination- continue as usual
                     chosenPop, chosenInd = currUsed[ind]['pop'], currUsed[ind]['indNum']
                     currGeno += geno[chosenPop][currPos][chosenInd]
+
+                if track:
+                    currAncestry += currUsed[ind]['pop']
         else:
             #Next Chromosome
             currGeno, currUsed, free = initializeState(numInd, alpha, geno, numA, numB)
+
+            if track:
+                currAncestry = ""
+                for ind in range(numInd):
+                    currAncestry += currUsed[ind]['pop']
 
         if not haploid:
             currGeno = haploidToDiploid(currGeno)
 
         admixedSnp.append(snp['A'][currPos])
         admixedGeno.append(currGeno)
+
+        if track:
+            ancestry.append(currAncestry)
+
         currPercent = int((currPos / totalLength) * 100)
         if currPercent > lastPercent:
             print("Completed: " + str(currPercent))
@@ -126,15 +145,16 @@ def singleAdmixture(popA, popB, numGenerations, alpha, numInd, haploid, track, p
     for indNum in range(numIters):
         admixedInd += popName + str(indNum) + " " + "U" + " " + popName + "\n"
 
-    return admixedGeno, admixedSnp, admixedInd
+    return admixedGeno, admixedSnp, admixedInd, ancestry
 
 
 params = open(sys.argv[1], "r").read().split('\n')
 popA = readData(params[0], params[1], params[2])
 popB = readData(params[3], params[4], params[5])
-admixedGeno, admixedSnp, admixedInd = singleAdmixture(popA, popB, int(params[7]), float(params[8]), int(params[9]),
-                                                      eval(params[10]), eval(params[11]), params[12])
+admixedGeno, admixedSnp, admixedInd, ancestry = singleAdmixture(popA, popB, int(params[7]), float(params[8]), int(params[9]), eval(params[10]), eval(params[11]), params[12])
 outFile = params[6]
 writeGeno(admixedGeno, outFile)
 writeSnp(admixedSnp, outFile)
 writeInd(admixedInd, outFile)
+if eval(params[11]):
+    writeAncestry(ancestry)
