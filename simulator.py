@@ -69,7 +69,7 @@ def writeInd(ind, popName):
     with open(popName + '.ind', 'w') as f:
         f.write(ind)
 
-def writeAncestry(ancestry):
+def writeAncestry(ancestry, popName):
     with open(popName + '.anc', 'w') as f:
         for entry in ancestry:
             f.write(entry + "\n")
@@ -157,4 +157,4 @@ writeGeno(admixedGeno, outFile)
 writeSnp(admixedSnp, outFile)
 writeInd(admixedInd, outFile)
 if eval(params[11]):
-    writeAncestry(ancestry)
+    writeAncestry(ancestry, params[12])
